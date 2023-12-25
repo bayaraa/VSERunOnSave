@@ -3,14 +3,28 @@
     <Metadata>
         <Identity Id="VSERunOnSave.d930e107-68ed-4080-ba55-276f87ddba80" Version="1.0" Language="en-US" Publisher="Bayaraa" />
         <DisplayName>VSERunOnSave</DisplayName>
-        <Description xml:space="preserve">Run VS Command or external call scripts on document save event.</Description>
+        <Description xml:space="preserve">Run VS commands or call external commands on document save event.</Description>
+        <MoreInfo>https://github.com/bayaraa/VSERunOnSave</MoreInfo>
         <Icon>icon.png</Icon>
+        <Preview>true</Preview>
     </Metadata>
     <Installation>
-        <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[15.0, 18.0)">
+        <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.0,18.0)">
             <ProductArchitecture>amd64</ProductArchitecture>
         </InstallationTarget>
         <InstallationTarget Version="[17.0,18.0)" Id="Microsoft.VisualStudio.Community">
+            <ProductArchitecture>arm64</ProductArchitecture>
+        </InstallationTarget>
+        <InstallationTarget Version="[17.0,18.0)" Id="Microsoft.VisualStudio.Pro">
+            <ProductArchitecture>amd64</ProductArchitecture>
+        </InstallationTarget>
+        <InstallationTarget Version="[17.0,18.0)" Id="Microsoft.VisualStudio.Pro">
+            <ProductArchitecture>arm64</ProductArchitecture>
+        </InstallationTarget>
+        <InstallationTarget Version="[17.0,18.0)" Id="Microsoft.VisualStudio.Enterprise">
+            <ProductArchitecture>amd64</ProductArchitecture>
+        </InstallationTarget>
+        <InstallationTarget Version="[17.0,18.0)" Id="Microsoft.VisualStudio.Enterprise">
             <ProductArchitecture>arm64</ProductArchitecture>
         </InstallationTarget>
     </Installation>
