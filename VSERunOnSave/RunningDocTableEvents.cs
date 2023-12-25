@@ -4,9 +4,9 @@ using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell.Interop;
 using System;
-using System.Threading.Tasks;
 using System.IO;
 using EditorConfig.Core;
+using System.Threading.Tasks;
 
 namespace VSERunOnSave
 {
@@ -92,7 +92,10 @@ namespace VSERunOnSave
 
                 fileConfig.Properties.TryGetValue("output_string", out string output_string);
                 if (!string.IsNullOrWhiteSpace(output_string))
+                {
+                    ReplaceDefines(document, ref output_string);
                     OutputString(output_string);
+                }
             }
         }
 
@@ -102,10 +105,6 @@ namespace VSERunOnSave
             if (string.IsNullOrWhiteSpace(commandString))
                 return;
 
-            var filePath = document.FullName;
-            var projectDir = Path.GetDirectoryName(dte.ActiveWindow.Project.FullName);
-            var solutionDir = Path.GetDirectoryName(dte.Solution.FullName);
-
             var commands = commandString.Split(',');
             foreach (var cmd in commands)
             {
@@ -113,9 +112,7 @@ namespace VSERunOnSave
                 if (string.IsNullOrWhiteSpace(command))
                     continue;
 
-                command = command.Replace("$(File)", filePath);
-                command = command.Replace("$(ProjectDir)", projectDir);
-                command = command.Replace("$(SolutionDir)", solutionDir);
+                ReplaceDefines(document, ref command);
 
                 if (isVSCommand)
                     executeVSCommand(command);
@@ -168,10 +165,22 @@ namespace VSERunOnSave
                 p.Start();
                 p.BeginOutputReadLine();
                 p.BeginErrorReadLine();
-                p.WaitForExit();
+                p.WaitForExit(120000);
                 p.Close();
             }
             catch (Exception) { }
+        }
+
+        private void ReplaceDefines(Document document, ref string command)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            command = command.Replace("$(File)", document.FullName);
+            command = command.Replace("$(FileDir)", Path.GetDirectoryName(document.FullName));
+            command = command.Replace("$(FileName)", Path.GetFileName(document.FullName));
+            command = command.Replace("$(FileNameNoExt)", Path.GetFileNameWithoutExtension(document.FullName));
+            command = command.Replace("$(ProjectDir)", Path.GetDirectoryName(dte.ActiveWindow.Project.FullName));
+            command = command.Replace("$(SolutionDir)", Path.GetDirectoryName(dte.Solution.FullName));
         }
 
         private Document CurrentDocument(uint docCookie)
@@ -210,8 +219,11 @@ namespace VSERunOnSave
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
-            outputPane.Activate();
-            outputPane.OutputString(line + System.Environment.NewLine);
+            if (!string.IsNullOrWhiteSpace(line))
+            {
+                outputPane.Activate();
+                outputPane.OutputString(line + System.Environment.NewLine);
+            }
         }
 
         public int OnAfterFirstDocumentLock(uint docCookie, uint dwRDTLockType, uint dwReadLocksRemaining, uint dwEditLocksRemaining)
