@@ -4,6 +4,7 @@
         <Identity Id="VSERunOnSave.d930e107-68ed-4080-ba55-276f87ddba80" Version="1.0" Language="en-US" Publisher="Bayaraa" />
         <DisplayName>VSERunOnSave</DisplayName>
         <Description xml:space="preserve">Run VS Command or external call scripts on document save event.</Description>
+        <Icon>icon.png</Icon>
     </Metadata>
     <Installation>
         <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[15.0, 18.0)">
