@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
     <Metadata>
-        <Identity Id="VSERunOnSave.d930e107-68ed-4080-ba55-276f87ddba80" Version="1.01" Language="en-US" Publisher="Bayaraa" />
+        <Identity Id="VSERunOnSave.d930e107-68ed-4080-ba55-276f87ddba80" Version="1.1.1" Language="en-US" Publisher="Bayaraa" />
         <DisplayName>VSERunOnSave</DisplayName>
         <Description xml:space="preserve">Run VS commands or call external commands on document save event.</Description>
         <MoreInfo>https://github.com/bayaraa/VSERunOnSave</MoreInfo>
