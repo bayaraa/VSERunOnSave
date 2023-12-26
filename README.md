@@ -39,7 +39,7 @@ output_string = Contents copied to clipboard!
 Ex: Compile fragment shader file and save with different name:
 ```ini
 [*.frag]
-ext_command_after = $(SolutionDir)\tools\glslangValidator.exe -s -V $(File) -o $(FileDir)\spir-v\$(FileNameNoExt).spv
+ext_command_after = "$(SolutionDir)\tools\glslangValidator.exe" -s -V "$(File)" -o "$(FileDir)\spir-v\$(FileNameNoExt).spv"
 output_string = Compiled: $(FileNameNoExt).spv
 ```
 
