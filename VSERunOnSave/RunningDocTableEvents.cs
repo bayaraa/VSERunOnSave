@@ -1,12 +1,13 @@
 ﻿using EnvDTE;
 using EnvDTE80;
-using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio;
+using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using System;
 using System.IO;
 using EditorConfig.Core;
-using System.Threading.Tasks;
+using System.Text;
+using System.Diagnostics;
 
 namespace VSERunOnSave
 {
@@ -16,6 +17,8 @@ namespace VSERunOnSave
         private readonly RunningDocumentTable runningDocumentTable;
         private readonly string configFileName = ".vserunonsave";
         private readonly string paneName = "VSERunOnSave";
+        private readonly int defaultTimeout = 30;
+
         private OutputWindowPane outputPane = null;
         private FileConfiguration fileConfig;
 
@@ -28,12 +31,48 @@ namespace VSERunOnSave
         public int OnBeforeSave(uint docCookie)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
+
             var document = CurrentDocument(docCookie);
             if (dte.ActiveWindow.Kind != "Document" || document == null)
                 return VSConstants.S_OK;
 
             document.Activate();
-            run(document, true);
+
+            var documentDir = Path.GetDirectoryName(document.FullName);
+
+            FileInfo configFile = null;
+            var dir = new DirectoryInfo(documentDir);
+            while (dir != null)
+            {
+                var files = dir.GetFiles(configFileName);
+                if (files.Length > 0)
+                {
+                    configFile = files[0];
+                    break;
+                }
+                dir = dir.Parent;
+            }
+
+            if (configFile == null)
+                return VSConstants.S_OK;
+
+            var parser = new EditorConfigParser(configFile.FullName);
+            fileConfig = parser.Parse(document.FullName);
+
+            if (fileConfig.Properties.TryGetValue("output_clear", out var clear) && (clear.ToLower() == "true" || clear == "1"))
+                ClearOutput();
+
+            if (fileConfig.Properties.TryGetValue("output_start", out string outputString) && !String.IsNullOrWhiteSpace(outputString))
+            {
+                ReplaceDefines(document, ref outputString);
+                Output(outputString);
+            }
+
+            if (fileConfig.Properties.TryGetValue("vs_command_before", out var vsCommandString))
+                ExecuteCommands(document, vsCommandString);
+
+            if (fileConfig.Properties.TryGetValue("ext_command_before", out var extCommandString))
+                ExecuteCommands(document, extCommandString, GetTimeoutValue());
 
             return VSConstants.S_OK;
         }
@@ -41,132 +80,118 @@ namespace VSERunOnSave
         public int OnAfterSave(uint docCookie)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
+
             var document = CurrentDocument(docCookie);
             if (dte.ActiveWindow.Kind != "Document" || document == null)
                 return VSConstants.S_OK;
 
-            run(document, false);
-            document.Activate();
+            if (fileConfig.Properties.TryGetValue("vs_command_after", out var vsCommandString))
+                ExecuteCommands(document, vsCommandString);
+
+            if (fileConfig.Properties.TryGetValue("ext_command_after", out var extCommandString))
+                ExecuteCommands(document, extCommandString, GetTimeoutValue());
+
+            if (fileConfig.Properties.TryGetValue("output_end", out string outputString) && !String.IsNullOrWhiteSpace(outputString))
+            {
+                ReplaceDefines(document, ref outputString);
+                Output(outputString);
+            }
 
             return VSConstants.S_OK;
         }
 
-        private void run(Document document, bool before)
+        private int GetTimeoutValue()
         {
-            ThreadHelper.ThrowIfNotOnUIThread();
-            if (before)
-            {
-                var document_dir = Path.GetDirectoryName(document.FullName);
-
-                FileInfo configFile = null;
-                var dir = new DirectoryInfo(document_dir);
-                while (dir != null)
-                {
-                    var files = dir.GetFiles(configFileName);
-                    if (files.Length > 0)
-                    {
-                        configFile = files[0];
-                        break;
-                    }
-                    dir = dir.Parent;
-                }
-
-                if (configFile == null)
-                    return;
-
-                var parser = new EditorConfigParser(configFile.FullName);
-                fileConfig = parser.Parse(document.FullName);
-
-                OutputString("", true);
-                fileConfig.Properties.TryGetValue("vs_command_before", out string vsCommandString);
-                fileConfig.Properties.TryGetValue("ext_command_before", out string extCommandString);
-                executeCommands(document, vsCommandString, true);
-                executeCommands(document, extCommandString, false);
-            }
-            else
-            {
-                fileConfig.Properties.TryGetValue("vs_command_after", out string vsCommandString);
-                fileConfig.Properties.TryGetValue("ext_command_after", out string extCommandString);
-                executeCommands(document, vsCommandString, true);
-                executeCommands(document, extCommandString, false);
-
-                fileConfig.Properties.TryGetValue("output_string", out string output_string);
-                if (!string.IsNullOrWhiteSpace(output_string))
-                {
-                    ReplaceDefines(document, ref output_string);
-                    OutputString(output_string);
-                }
-            }
+            if (fileConfig.Properties.TryGetValue("ext_command_timeout", out var timeoutString))
+                return Math.Max(0, Math.Min(Int32.Parse(timeoutString), 120));
+            return defaultTimeout;
         }
 
-        private void executeCommands(Document document, string commandString, bool isVSCommand)
+        private void ExecuteCommands(Document document, string commandString, int timeout = -1)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            if (string.IsNullOrWhiteSpace(commandString))
+
+            if (String.IsNullOrWhiteSpace(commandString))
                 return;
 
             var commands = commandString.Split(',');
             foreach (var cmd in commands)
             {
                 var command = cmd.Trim();
-                if (string.IsNullOrWhiteSpace(command))
+                if (String.IsNullOrWhiteSpace(command))
                     continue;
 
                 ReplaceDefines(document, ref command);
 
-                if (isVSCommand)
-                    executeVSCommand(command);
+                if (timeout == -1)
+                    ExecuteVSCommand(command);
                 else
-                    executeExternalCommand(command);
+                    ExecuteExternalCommand(command, timeout);
             }
         }
 
-        private void executeVSCommand(string command)
+        private void ExecuteVSCommand(string command)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             try
             {
                 var segments = command.Split(new char[] { ' ' }, 2);
-                var vsCommand = segments[0];
+                command = segments[0];
                 var arguments = segments.Length > 1 ? segments[1].Trim() : string.Empty;
-                dte.ExecuteCommand(vsCommand, arguments);
+                dte.ExecuteCommand(command, arguments);
             }
             catch (Exception) { }
         }
 
-        private void executeExternalCommand(string command)
+        private void ExecuteExternalCommand(string command, int timeout)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             try
             {
-                var extCommand = command;
-                var arguments = string.Empty;
+                var arguments = String.Empty;
                 if (command[0] == '"')
                 {
                     var segments = command.Split(new string[] { "\" " }, 2, StringSplitOptions.None);
-                    extCommand = segments[0] + '"';
-                    arguments = segments.Length > 1 ? segments[1].Trim() : string.Empty;
+                    command = segments[0] + '"';
+                    arguments = segments.Length > 1 ? segments[1].Trim() : String.Empty;
                 }
                 else
                 {
                     var segments = command.Split(new char[] { ' ' }, 2);
-                    extCommand = segments[0];
-                    arguments = segments.Length > 1 ? segments[1].Trim() : string.Empty;
+                    command = segments[0];
+                    arguments = segments.Length > 1 ? segments[1].Trim() : String.Empty;
                 }
 
-                System.Diagnostics.Process p = new System.Diagnostics.Process();
-                p.StartInfo.FileName = @"" + extCommand;
-                p.StartInfo.Arguments = arguments;
-                p.StartInfo.UseShellExecute = false;
-                p.StartInfo.CreateNoWindow = true;
-                p.StartInfo.RedirectStandardOutput = true;
-                p.StartInfo.RedirectStandardInput = true;
-                p.StartInfo.RedirectStandardError = true;
-                p.OutputDataReceived += (sender, args) => OutputStringAsync(args.Data).ConfigureAwait(true);
-                p.ErrorDataReceived += (sender, args) => OutputStringAsync(args.Data).ConfigureAwait(true);
-                p.Start();
-                p.BeginOutputReadLine();
-                p.BeginErrorReadLine();
-                p.WaitForExit(120000);
-                p.Close();
+                System.Diagnostics.Process process = new System.Diagnostics.Process();
+                process.StartInfo.FileName = @"" + command;
+                process.StartInfo.Arguments = arguments;
+                process.StartInfo.UseShellExecute = false;
+                process.StartInfo.CreateNoWindow = true;
+                process.StartInfo.RedirectStandardOutput = true;
+                process.StartInfo.RedirectStandardInput = true;
+                process.StartInfo.RedirectStandardError = true;
+
+                StringBuilder outputData = new StringBuilder();
+                process.OutputDataReceived += new DataReceivedEventHandler((sender, e) => {
+                    if (!String.IsNullOrEmpty(e.Data))
+                        outputData.AppendLine(e.Data);
+                });
+                process.ErrorDataReceived += new DataReceivedEventHandler((sender, e) => {
+                    if (!String.IsNullOrEmpty(e.Data))
+                        outputData.AppendLine(e.Data);
+                });
+
+                process.Start();
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+                bool exited = process.WaitForExit(timeout * 1000);
+                process.Close();
+
+                Output(outputData.ToString().TrimEnd());
+                if (!exited)
+                    Output("Command timedout(" + timeout.ToString() + "s): " + command + " " + arguments);
             }
             catch (Exception) { }
         }
@@ -175,17 +200,22 @@ namespace VSERunOnSave
         {
             ThreadHelper.ThrowIfNotOnUIThread();
 
+            command = command.Replace("$(nl)", Environment.NewLine);
             command = command.Replace("$(File)", document.FullName);
             command = command.Replace("$(FileDir)", Path.GetDirectoryName(document.FullName));
             command = command.Replace("$(FileName)", Path.GetFileName(document.FullName));
             command = command.Replace("$(FileNameNoExt)", Path.GetFileNameWithoutExtension(document.FullName));
             command = command.Replace("$(ProjectDir)", Path.GetDirectoryName(dte.ActiveWindow.Project.FullName));
             command = command.Replace("$(SolutionDir)", Path.GetDirectoryName(dte.Solution.FullName));
+            command = command.Replace("$(Configuration)", dte.ActiveWindow.Project.ConfigurationManager.ActiveConfiguration.ConfigurationName);
+            command = command.Replace("$(Platform)", dte.ActiveWindow.Project.ConfigurationManager.ActiveConfiguration.PlatformName);
+            command = command.Replace("$(time)", DateTime.Now.ToString("HH:mm:ss"));
         }
 
         private Document CurrentDocument(uint docCookie)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
+
             try
             {
                 var documentInfo = runningDocumentTable.GetDocumentInfo(docCookie);
@@ -200,30 +230,35 @@ namespace VSERunOnSave
             return dte.ActiveDocument;
         }
 
-        private void OutputString(string line, bool clear = false)
+        private void Output(string line, bool clear = false)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            if (outputPane == null)
-                outputPane = dte.ToolWindows.OutputWindow.OutputWindowPanes.Add(paneName);
 
+            CreateOutputPane();
             if (clear)
-            {
-                outputPane.Clear();
-                return;
-            }
-            outputPane.Activate();
-            outputPane.OutputString(line + System.Environment.NewLine);
-        }
+                ClearOutput();
 
-        private async Task OutputStringAsync(string line)
-        {
-            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-
-            if (!string.IsNullOrWhiteSpace(line))
+            if (line != String.Empty)
             {
                 outputPane.Activate();
-                outputPane.OutputString(line + System.Environment.NewLine);
+                outputPane.OutputString(line + Environment.NewLine);
             }
+        }
+
+        private void ClearOutput()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            CreateOutputPane();
+            outputPane.Clear();
+        }
+
+        private void CreateOutputPane()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            if (outputPane == null)
+                outputPane = dte.ToolWindows.OutputWindow.OutputWindowPanes.Add(paneName);
         }
 
         public int OnAfterFirstDocumentLock(uint docCookie, uint dwRDTLockType, uint dwReadLocksRemaining, uint dwEditLocksRemaining)
