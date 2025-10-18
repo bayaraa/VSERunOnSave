@@ -1,50 +1,87 @@
-VSERunOnSave
+# VSERunOnSave
+
 ========================
-This **Visual Studio Extension** enables call **VS** commands or external commands on before/after save event of the file currently being edited.  
-Supports Visual Studio 2022 x64/arm64 platforms.
+
+This **Visual Studio Extension** allows you to execute **Visual Studio commands** or **external tools** automatically **before** or **after** saving a file.
+Supports **Visual Studio 2022** on both **x64** and **ARM64** platforms.
+
+---
+
+## Features
+
+* Run **VS commands** (e.g. `Edit.FormatDocument`, `Build.BuildSolution`) before or after saving.
+* Run **external commands** or scripts (e.g. formatters, compilers, or custom tools).
+* Automatically substitute variables like `$(File)`, `$(ProjectDir)`, `$(Configuration)`, etc.
+* Display messages in a dedicated Visual Studio output pane.
+* Compatible with both `.vserunonsave` and `.editorconfig` configuration files.
+* Fully supports C++, C#, and other project types.
+* Non-blocking — long-running external commands respect a configurable timeout.
+
+---
 
 ## Configuration
-In order to work this extension, you need to create `.vserunonsave` configuration file in your solution or project root directory.  
-Each section may have following config lines:
-- `vs_command_before` VS commands to run right before the document is saved.
-- `vs_command_after` VS commands to run right after the document is saved.
-- `ext_command_before` External commands to call right before the document is saved.
-- `ext_command_after` External commands to call right after the document is saved.
-- `ext_command_timeout` Timeout setting for each external commands in seconds.
-- `output_clear` Clear the output pane before all commands run.
-- `output_start` A string to display in the output pane before all commands run.
-- `output_end` A string to display in the output pane after all commands run.
-- ~~`output_string` simple message to display into output pane after all commands runs.~~ **Removed. Use:`output_end`*
 
-**You can enter comma separated multiple commands.*  
-**All config are optional.* 
+The `.vserunonsave` configuration file follows the **[EditorConfig](https://editorconfig.org/)** file format and syntax.
+You can use familiar INI-style sections (e.g. `[*.cpp]`), `key = value` pairs, and the `root = true` directive to stop searching parent directories.
 
-Automatically replaced built-in variables:
-- `$(File)` Full path of the file currently being edited.
-- `$(FileDir)` Directory of the file currently being edited (without trailing `\`).
-- `$(FileName)` File name of the file currently being edited.
-- `$(FileNameNoExt)` File name of the file currently being edited (without extension).
-- `$(ProjectDir)` Project directory (without trailing `\`).
-- `$(SolutionDir)` Solution directory (without trailing `\`).
-- `$(Configuration)` Current project's build configuration name (ex: Release/Debug etc).
-- `$(Platform)` Current project's build platform name (ex: x64/Win32/arm64 etc).
-- `$(time)` Current time (format: HH:mm:ss).
-- `$(nl)` New line character (Useful when you output multiline string).
+If no `.vserunonsave` file is found, the extension automatically falls back to `.editorconfig`.
+
+Create a `.vserunonsave` file in your **solution** or **project** root directory.
+All keys are **optional** and support **comma-separated multiple commands**.
+
+| Key                   | Description                                              |
+| --------------------- | -------------------------------------------------------- |
+| `vs_command_before`   | VS command(s) to execute **before** saving the document. |
+| `vs_command_after`    | VS command(s) to execute **after** saving the document.  |
+| `ext_command_before`  | External command(s) to execute **before** saving.        |
+| `ext_command_after`   | External command(s) to execute **after** saving.         |
+| `ext_command_timeout` | Timeout for each external command (in seconds).          |
+| `output_clear`        | Clears the output pane before any commands run.          |
+| `output_start`        | Message to display **before** commands run.              |
+| `output_end`          | Message to display **after** all commands finish.        |
+| ~~`output_string`~~   | *Removed. Use `output_end` instead.*                     |
+
+---
+
+## Built-in Variable Replacements
+
+These predefined variables are automatically replaced at runtime:
+
+| Variable           | Description                                            |
+| ------------------ | ------------------------------------------------------ |
+| `$(File)`          | Full path of the file currently being edited.          |
+| `$(FileDir)`       | Directory of the current file (without trailing `\`).  |
+| `$(FileName)`      | File name of the current file.                         |
+| `$(FileNameNoExt)` | File name without extension.                           |
+| `$(ProjectDir)`    | Project directory (without trailing `\`).              |
+| `$(SolutionDir)`   | Solution directory (without trailing `\`).             |
+| `$(Configuration)` | Current build configuration (e.g. `Debug`, `Release`). |
+| `$(Platform)`      | Current build platform (e.g. `x64`, `Win32`, `arm64`). |
+| `$(time)`          | Current time in `HH:mm:ss` format.                     |
+| `$(nl)`            | Newline character (useful for multiline output).       |
+
+---
 
 ## Examples
-Ex: Any c/c++ source/header files to automatically formatted upon save:
+
+**1️⃣ Automatically format all C/C++ files upon save**
+
 ```ini
 [*.{cpp,hpp,c,h}]
 vs_command_before = Edit.FormatDocument
 ```
-Ex: sample.cs file to automatically formatted and all it's contents copied to clipboard:
+
+**2️⃣ Automatically format and copy a C# file’s contents**
+
 ```ini
 [sample.cs]
 vs_command_before = Edit.FormatDocument
 vs_command_after = Edit.SelectAll, Edit.Copy
 output_end = Contents copied to clipboard!
 ```
-Ex: Compile fragment shader file and save with different name:
+
+**3️⃣ Compile a GLSL shader and save as SPIR-V**
+
 ```ini
 [*.frag]
 ext_command_after = "$(SolutionDir)\tools\glslangValidator.exe" -s -V "$(File)" -o "$(FileDir)\spir-v\$(FileNameNoExt).spv"
@@ -53,17 +90,33 @@ output_end = Compiled: $(FileNameNoExt).spv
 output_clear = true
 ```
 
+---
+
 ## Credits
-Inspired by [VSE-FormatDocumentOnSave](https://github.com/Elders/VSE-FormatDocumentOnSave) extension by mynkow.
+
+Inspired by the [VSE-FormatDocumentOnSave](https://github.com/Elders/VSE-FormatDocumentOnSave) extension by **mynkow**.
+
+---
 
 ## Change Log
-### 1.1.2
-- Overall code refator.
-- Added: Configs `ext_command_timeout` `output_clear` `output_start`.
-- Added: Variables `$(Configuration)` `$(Platform)` `$(time)` `$(nl)`.
-- Added: Slow commands can block VS until they finish. Now you can use `ext_command_timeout` to break.
-- Changed: Config `output_string` replaced with `output_end`.
-- Changed: now output pane not cleared after all commands run. Have to set `output_clear` to clear pane.
 
-### 1.0.0
-Initial release.
+### **1.1.4**
+
+* Added fallback support for `.editorconfig` when `.vserunonsave` is not present.
+* Added support for the `unset` keyword to explicitly disable inherited settings.
+* Improved configuration caching and file lookup performance.
+* Fixed possible null-reference errors when no project or solution is loaded.
+* Minor refactoring and improved logging clarity.
+
+### **1.1.2**
+
+* Major internal refactor for stability and maintainability.
+* Added new settings: `ext_command_timeout`, `output_clear`, and `output_start`.
+* Added new variables: `$(Configuration)`, `$(Platform)`, `$(time)`, and `$(nl)`.
+* Long-running commands no longer block VS — use `ext_command_timeout` to limit execution time.
+* Replaced `output_string` with `output_end`.
+* Output pane is no longer cleared automatically; use `output_clear = true` if desired.
+
+### **1.0.0**
+
+* Initial release.
