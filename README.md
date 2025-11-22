@@ -1,9 +1,7 @@
 # VSERunOnSave
 
-========================
-
 This **Visual Studio Extension** allows you to execute **Visual Studio commands** or **external tools** automatically **before** or **after** saving a file.
-Supports **Visual Studio 2022** on both **x64** and **ARM64** platforms.
+Supports **Visual Studio 2022/2026** on both **x64** and **ARM64** platforms.
 
 ---
 
@@ -57,6 +55,7 @@ These predefined variables are automatically replaced at runtime:
 | `$(SolutionDir)`   | Solution directory (without trailing `\`).             |
 | `$(Configuration)` | Current build configuration (e.g. `Debug`, `Release`). |
 | `$(Platform)`      | Current build platform (e.g. `x64`, `Win32`, `arm64`). |
+| `$(VSRootDir)`     | Visual Studio root directory (without trailing `\`).   |
 | `$(time)`          | Current time in `HH:mm:ss` format.                     |
 | `$(nl)`            | Newline character (useful for multiline output).       |
 
@@ -64,14 +63,14 @@ These predefined variables are automatically replaced at runtime:
 
 ## Examples
 
-**1️⃣ Automatically format all C/C++ files upon save**
+**Automatically format all C/C++ files upon save**
 
 ```ini
 [*.{cpp,hpp,c,h}]
 vs_command_before = Edit.FormatDocument
 ```
 
-**2️⃣ Automatically format and copy a C# file’s contents**
+**Automatically format and copy a C# file’s contents**
 
 ```ini
 [sample.cs]
@@ -80,7 +79,7 @@ vs_command_after = Edit.SelectAll, Edit.Copy
 output_end = Contents copied to clipboard!
 ```
 
-**3️⃣ Compile a GLSL shader and save as SPIR-V**
+**Compile a GLSL shader and save as SPIR-V**
 
 ```ini
 [*.frag]
@@ -99,6 +98,10 @@ Inspired by the [VSE-FormatDocumentOnSave](https://github.com/Elders/VSE-FormatD
 ---
 
 ## Change Log
+
+### **1.1.6**
+* Added new variable: `$(VSRootDir)`.
+* Removed admin rights to install extension.
 
 ### **1.1.4**
 

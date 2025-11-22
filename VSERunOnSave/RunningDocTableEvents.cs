@@ -1,7 +1,8 @@
-﻿using EditorConfig.Core;
+using EditorConfig.Core;
 using EnvDTE;
 using EnvDTE80;
 using Microsoft.VisualStudio;
+using Microsoft.VisualStudio.Setup.Configuration;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using System;
@@ -47,6 +48,14 @@ namespace VSERunOnSave
         private OutputWindowPane _outputPane = null;
         private bool _outputPaneActive = false;
         private Entry _configEntry = null;
+
+        private static readonly Lazy<string> _vsRoot = new(() =>
+        {
+            var config = new SetupConfiguration();
+            var instance = config.GetInstanceForCurrentProcess();
+            return instance.GetInstallationPath().TrimEnd('\\');
+        });
+        public static string VSRootDir => _vsRoot.Value;
 
         public RunningDocTableEvents(DTE2 _dte, RunningDocumentTable _runningDocumentTable)
         {
@@ -227,6 +236,7 @@ namespace VSERunOnSave
             command = command.Replace("$(FileName)", Path.GetFileName(document.FullName));
             command = command.Replace("$(FileNameNoExt)", Path.GetFileNameWithoutExtension(document.FullName));
             command = command.Replace("$(time)", DateTime.Now.ToString("HH:mm:ss"));
+            command = command.Replace("$(VSRootDir)", VSRootDir);
 
             var solution = _dte.Solution;
             command = command.Replace("$(SolutionDir)", solution != null ? Path.GetDirectoryName(solution.FullName) : "");
